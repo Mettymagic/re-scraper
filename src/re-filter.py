@@ -23,6 +23,7 @@ def filter(title_str):
     for term in INCLUDE_TERMS:
         if term.lower() in title:
             include = True
+            
     
 print(filter("How is it that AI can become biased, and what are the proposals to mitigate this?"))
     
