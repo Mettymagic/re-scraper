@@ -1,11 +1,12 @@
 import requests
 import re
 import csv
+import base64
 from bs4 import BeautifulSoup
 
 MIN_YEAR = 2018
 MAX_YEAR = 2025
-DUMP_NAME = "output.csv"
+DUMP_NAME = "output_%s.csv"
 
 # which track for ICSE, RE20, etc - technical, seng in practice, seng in society, all of them?
 # should i include track in the source?
@@ -43,7 +44,7 @@ RE_URL = [
         "track":"td:nth-child(3)",
         "yr":"2019"
     }],
-    #UNSCRAPABLE - at least not without some extra work, easier to manually review
+    #requires a lot of extra work to scrape, easier to just go through manually...
     ["https://re20.org/index.php/accepted-papers/", {
         "row":"div.cmsmasters_toggle_wrap:nth-child(-n+3) table tbody tr",
         "title":"td.ninja_column_1 > strong",
@@ -54,6 +55,7 @@ RE_URL = [
 
 ]
 
+#cloudflare, anti-scraper - will take more work
 SCIDIRECT_URL = [
     ["https://www.sciencedirect.com/journal/information-and-software-technology/vol/%s/", [93, 178]],
     ["https://www.sciencedirect.com/journal/journal-of-systems-and-software/vol/%s/", [135, 220]]
@@ -69,31 +71,32 @@ def scrapeSpringer(base_url, vol, issue):
     url = base_url % (vol, issue)
     soup = getResponse(url) # python object to parse dom
     #return on page not found
-    if soup.select_one("body > div.p-table-row--expanded").find(attrs={"data-test":"springer-not-found-page"}): return
-    print("Scraping %s...                                                          " % url)
+    if soup.find(attrs={"data-test":"springer-not-found-page"}): return
+    print("Scraping %s..." % url)
     yr = soup.select_one("#main > div > div > div > div.app-journal-latest-issue > header > time").find(string=True, recursive=False).split(" ")[1]
     for row in soup.select("#main > div > div > div > section > ol > li"):
         title = row.select_one("article > div.app-card-open__main > h3 > a").find(string=True, recursive=False)
-        author_list = row.select_one("article > div.app-card-open__main > div.app-card-open__text-container > div.app-card-open__authors > span > ul > li")
+        author_list = row.select("article > div.app-card-open__main > div.app-card-open__text-container > div.app-card-open__authors > span > ul > li")
         author = getAuthorString(author_list)
         results.append({
             "Title" : title,
             "Author(s)" : author.strip(),
             "Publication Year" : yr,
-            "Publication Source" : "ESS'"+yr+" - Vol. "+vol+", Issue. "+issue,
+            "Publication Source" : "ESS'"+yr+" - Vol. "+str(vol)+", Issue. "+str(issue),
             "Retrieval Link" : url
         })
 
 
 def scrapeSD(base_url, vol):
-    url = base_url.replace("%s", vol)
+    url = base_url.replace("%s", str(vol))
     src = ""
     if "journal-of-systems-and-software" in url: src = "JSS'" 
     else: src = "IST'"
     print("Scraping %s...                                                          " % url)
     soup = getResponse(url) # python object to parse dom
+    print(soup.get_text)
     yr_str = soup.select_one("#react-root > div > div > div > main > section:nth-child(2) > div > div > div > h3").find(string=True, recursive=False)
-    regex = r".*\(.* (\d*)\)"
+    regex = r'.*\(.* (\d*)\)'
     yr = re.search(".*\(.* (\d*)\)", yr_str).group(1)
     for row in soup.select("ol.article-list-items > li.js-section-level-0:last-child > ol.article-list > li.js-article-list-item"):
         title = row.select_one("span.js-article-title").find(string=True, recursive=False)
@@ -169,27 +172,34 @@ def getResponse(url):
         "Accept-Language":"en-US,en;q=0.9",
         "Referer":"https://www.google.com/" #shouldn't matter
     })
-    soup = BeautifulSoup(x.content, "html.parser")
+    encoding = x.encoding if 'charset' in x.headers.get('content-type', '').lower() else None
+    soup = BeautifulSoup(x.content, "html.parser", from_encoding=encoding)
     return soup
 
-def outputData():
-     with open(DUMP_NAME, "w", newline='', encoding='utf-8') as f:
+def outputData(id: int):
+    name = DUMP_NAME.replace("%s", str(id))
+    with open(name, "w", newline='', encoding='utf-8') as f:
         w = csv.writer(f)
         w.writerow(results[0].keys())
         for res in results:
             w.writerow(res.values())
+    results.clear()
+    print("Results saved in %s." % name)
 
 # == Main ==
 for row in RESEARCHR_URL:
     scrapeResearchr(row[0], row[1])
+outputData(0)
 for row in RE_URL:
     scrapeRE(row[0], row[1])
+outputData(1)
 for row in SCIDIRECT_URL:
     for issue in range(row[1][0], row[1][1]+1):
         scrapeSD(row[0], issue)
+outputData(2)
 for row in SPRINGER_URL:
     for volume in range(row[1][0], row[1][1]+1):
-        for issue in range(row[2]+1):
+        for issue in range(1, row[2]+1):
             scrapeSpringer(row[0], volume, issue)
-outputData()
+outputData(3)
 print("Results saved in %s." % DUMP_NAME)
