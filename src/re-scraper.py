@@ -30,19 +30,26 @@ RESEARCHR_URL = [
 #include selectors
 RE_URL = [
     ["https://re18.org/acceptedPapers.html", {
-        "row":"",
-        "title":"",
-        "author":""
+        "row":"#all > div > div > table > tbody > tr:not(:nth-child(-n+1))",
+        "title":"td:nth-child(2) > strong, td:nth-child(2) > p > strong",
+        "author":"td:nth-child(2), td:nth-child(2) > p, td:nth-child(2) > em",
+        "track":"td:nth-child(3)",
+        "yr":"2018"
     }],
     ["http://re19.ajou.ac.kr/pages/conference/accepted_papers/", {
-        "row":"",
-        "title":"",
-        "author":""
+        "row":"#papers-table > tbody > tr",
+        "title":"td:nth-child(2) > strong",
+        "author":"td:nth-child(2)",
+        "track":"td:nth-child(3)",
+        "yr":"2019"
     }],
+    #UNSCRAPABLE
     ["https://re20.org/index.php/accepted-papers/", {
-        "row":"",
-        "title":"",
-        "author":""
+        "row":"div.cmsmasters_toggle_wrap:nth-child(-n+3) table tbody tr",
+        "title":"td.ninja_column_1 > strong",
+        "author":"td.ninja_column_1 > em",
+        "track":"td.ninja_column_2",
+        "yr":"2020"
     }]
 
 ]
@@ -57,6 +64,26 @@ SPRINGER_URL = [
 ]
 
 results = []
+
+def scrapeRE(url, selectors):
+    print("Scraping %s...                                                          " % url)
+    soup = getResponse(url) # python object to parse dom
+    print(soup.prettify())
+    for row in soup.select(selectors["row"]):
+        title = row.select_one(selectors["title"]).find(string=True, recursive=False)
+        author = "FIND MANUALLY"
+        for selector in row.select(selectors["author"]):
+            author = selector.find(string=True, recursive=False)
+            if isinstance(author, str):
+                if author.strip != "": break
+        track = row.select_one(selectors["track"]).find(string=True, recursive=False)
+        results.append({
+            "Title" : title,
+            "Author(s)" : author.strip(),
+            "Publication Year" : selectors["yr"],
+            "Publication Source" : "RE'"+selectors["yr"]+" - "+track,
+            "Retrieval Link" : url
+        })
 
 
 
@@ -116,9 +143,12 @@ def outputData():
             w.writerow(res.values())
 
 # == Main ==
-
+'''
 for row in RESEARCHR_URL:
     scrapeResearchr(row[0], row[1])
+'''
+for row in RE_URL:
+    scrapeRE(row[0], row[1])
 outputData()
 print("Results saved in %s." % DUMP_NAME)
 '''
