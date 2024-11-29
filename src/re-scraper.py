@@ -1,5 +1,5 @@
 import requests
-import os
+import re
 import csv
 from bs4 import BeautifulSoup
 
@@ -43,7 +43,7 @@ RE_URL = [
         "track":"td:nth-child(3)",
         "yr":"2019"
     }],
-    #UNSCRAPABLE
+    #UNSCRAPABLE - at least not without some extra work, easier to manually review
     ["https://re20.org/index.php/accepted-papers/", {
         "row":"div.cmsmasters_toggle_wrap:nth-child(-n+3) table tbody tr",
         "title":"td.ninja_column_1 > strong",
@@ -56,7 +56,7 @@ RE_URL = [
 
 SCIDIRECT_URL = [
     ["https://www.sciencedirect.com/journal/information-and-software-technology/vol/%s/", [93, 178]],
-    ["https://www.sciencedirect.com/journal/journal-of-systems-and-software/issues", [135, 220]]
+    ["https://www.sciencedirect.com/journal/journal-of-systems-and-software/vol/%s/", [135, 220]]
 ]
 
 SPRINGER_URL = [
@@ -65,10 +65,50 @@ SPRINGER_URL = [
 
 results = []
 
+def scrapeSpringer(base_url, vol, issue):
+    url = base_url % (vol, issue)
+    soup = getResponse(url) # python object to parse dom
+    #return on page not found
+    if soup.select_one("body > div.p-table-row--expanded").find(attrs={"data-test":"springer-not-found-page"}): return
+    print("Scraping %s...                                                          " % url)
+    yr = soup.select_one("#main > div > div > div > div.app-journal-latest-issue > header > time").find(string=True, recursive=False).split(" ")[1]
+    for row in soup.select("#main > div > div > div > section > ol > li"):
+        title = row.select_one("article > div.app-card-open__main > h3 > a").find(string=True, recursive=False)
+        author_list = row.select_one("article > div.app-card-open__main > div.app-card-open__text-container > div.app-card-open__authors > span > ul > li")
+        author = getAuthorString(author_list)
+        results.append({
+            "Title" : title,
+            "Author(s)" : author.strip(),
+            "Publication Year" : yr,
+            "Publication Source" : "ESS'"+yr+" - Vol. "+vol+", Issue. "+issue,
+            "Retrieval Link" : url
+        })
+
+
+def scrapeSD(base_url, vol):
+    url = base_url.replace("%s", vol)
+    src = ""
+    if "journal-of-systems-and-software" in url: src = "JSS'" 
+    else: src = "IST'"
+    print("Scraping %s...                                                          " % url)
+    soup = getResponse(url) # python object to parse dom
+    yr_str = soup.select_one("#react-root > div > div > div > main > section:nth-child(2) > div > div > div > h3").find(string=True, recursive=False)
+    regex = r".*\(.* (\d*)\)"
+    yr = re.search(".*\(.* (\d*)\)", yr_str).group(1)
+    for row in soup.select("ol.article-list-items > li.js-section-level-0:last-child > ol.article-list > li.js-article-list-item"):
+        title = row.select_one("span.js-article-title").find(string=True, recursive=False)
+        author = row.select_one("div.js-article__item__authors").find(string=True, recursive=False)
+        results.append({
+            "Title" : title,
+            "Author(s)" : author.strip(),
+            "Publication Year" : yr,
+            "Publication Source" : src+yr+" - Vol. "+vol,
+            "Retrieval Link" : url
+        })
+
 def scrapeRE(url, selectors):
     print("Scraping %s...                                                          " % url)
     soup = getResponse(url) # python object to parse dom
-    print(soup.prettify())
     for row in soup.select(selectors["row"]):
         title = row.select_one(selectors["title"]).find(string=True, recursive=False)
         author = "FIND MANUALLY"
@@ -85,9 +125,6 @@ def scrapeRE(url, selectors):
             "Retrieval Link" : url
         })
 
-
-
-# visits each image result page and downloads all results
 def scrapeResearchr(base_url, range):
     for yr in range:
         url = base_url.replace("%s", str(yr))
@@ -107,7 +144,7 @@ def scrapeResearchr(base_url, range):
 def getAuthorString(souplist):
     str = ""
     for auth in souplist:
-        str += auth.decode_contents()
+        str += auth.find(string=True, recursive=False)
         str += ", "
     return str[:-2]
 
@@ -143,18 +180,16 @@ def outputData():
             w.writerow(res.values())
 
 # == Main ==
-'''
 for row in RESEARCHR_URL:
     scrapeResearchr(row[0], row[1])
-'''
 for row in RE_URL:
     scrapeRE(row[0], row[1])
+for row in SCIDIRECT_URL:
+    for issue in range(row[1][0], row[1][1]+1):
+        scrapeSD(row[0], issue)
+for row in SPRINGER_URL:
+    for volume in range(row[1][0], row[1][1]+1):
+        for issue in range(row[2]+1):
+            scrapeSpringer(row[0], volume, issue)
 outputData()
 print("Results saved in %s." % DUMP_NAME)
-'''
-for url in journal_urls:
-    if "sciencedirect" in url:
-        scrapeScienceDirect(url)
-    elif "springer" in url:
-        scrapeSpringer(url)
-'''
