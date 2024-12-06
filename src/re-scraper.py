@@ -36,8 +36,8 @@ RESEARCHR_FSE_URL = [
 RE_URL = [
     ["https://re18.org/acceptedPapers.html", {
         "row":"#all > div > div > table > tbody > tr:not(:nth-child(-n+1))",
-        "title":"td:nth-child(2) > strong, td:nth-child(2) > p > strong",
-        "author":"td:nth-child(2), td:nth-child(2) > p, td:nth-child(2) > em",
+        "title":"td:nth-child(2) > p > strong, td:nth-child(2) > strong",
+        "author":"td:nth-child(2) > p, td:nth-child(2)",
         "track":"td:nth-child(3)",
         "yr":"2018"
     }],
@@ -80,9 +80,9 @@ def scrapeSpringer(base_url, vol, issue):
     #return on page not found
     if soup.find(attrs={"data-test":"springer-not-found-page"}): return
     print("Scraping %s..." % url)
-    yr = soup.select_one("#main > div > div > div > div.app-journal-latest-issue > header > time").find(string=True, recursive=False).split(" ")[1]
+    yr = soup.select_one("#main > div > div > div > div.app-journal-latest-issue > header > time").text.split(" ")[1]
     for row in soup.select("#main > div > div > div > section > ol > li"):
-        title = row.select_one("article > div.app-card-open__main > h3 > a").find(string=True, recursive=False)
+        title = row.select_one("article > div.app-card-open__main > h3 > a").text
         author_list = row.select("article > div.app-card-open__main > div.app-card-open__text-container > div.app-card-open__authors > span > ul > li")
         author = getAuthorString(author_list)
         results.append({
@@ -101,12 +101,11 @@ def scrapeSD(base_url, vol):
     else: src = "IST'"
     print("Scraping %s..." % url)
     soup = getResponse(url) # python object to parse dom
-    print(soup.get_text)
-    yr_str = soup.select_one("#react-root > div > div > div > main > section:nth-child(2) > div > div > div > h3").find(string=True, recursive=False)
+    yr_str = soup.select_one("#react-root > div > div > div > main > section:nth-child(2) > div > div > div > h3").text
     regex = r'.*\(.* (\d*)\)'
     yr = re.search(".*\(.* (\d*)\)", yr_str).group(1)
     for row in soup.select("ol.article-list-items > li.js-section-level-0:last-child > ol.article-list > li.js-article-list-item"):
-        title = row.select_one("span.js-article-title").find(string=True, recursive=False)
+        title = row.select_one("span.js-article-title").text
         author = row.select_one("div.js-article__item__authors").find(string=True, recursive=False)
         results.append({
             "Title" : title,
@@ -120,13 +119,11 @@ def scrapeRE(url, selectors):
     print("Scraping %s..." % url)
     soup = getResponse(url) # python object to parse dom
     for row in soup.select(selectors["row"]):
-        title = row.select_one(selectors["title"]).find(string=True, recursive=False)
-        author = "FIND MANUALLY"
-        for selector in row.select(selectors["author"]):
-            author = selector.find(string=True, recursive=False)
-            if isinstance(author, str):
-                if author.strip != "": break
-        track = row.select_one(selectors["track"]).find(string=True, recursive=False)
+        title = row.select_one(selectors["title"]).text.split(". ")[0].replace(", Data Challenge", "").replace(", Data show case", "")
+        author = row.select(selectors["author"])[-1].text.split("\n")
+        if "18" in url: author = author[-1]
+        elif "19" in url: author = author[2]
+        track = row.select_one(selectors["track"]).text
         results.append({
             "Title" : title,
             "Author(s)" : author.strip(),
@@ -144,7 +141,7 @@ def scrapeResearchr(base_url, range):
         src = soup.select_one("#content > div.page-header > h1 > span").decode_contents().rsplit(" ", 1)[0] + " - " + soup.select_one("#content > div.page-header > h1").find(string=True, recursive=False)
         for row in soup.select("#event-overview > table tr td:nth-child(2)"):
             results.append({
-                "Title" : row.select_one("a:nth-child(1)").find(string=True, recursive=False),
+                "Title" : row.select_one("a:nth-child(1)").text,
                 "Author(s)" : getAuthorString(row.select("div.performers > a")),
                 "Publication Year" : yr,
                 "Publication Source" : src,
@@ -199,6 +196,7 @@ for row in RE_URL:
 for row in RESEARCHR_RE_URL:
     scrapeResearchr(row[0], row[1])
 outputData("re")
+exit()
 
 for row in RESEARCHR_ICSE_URL:
     scrapeResearchr(row[0], row[1])
