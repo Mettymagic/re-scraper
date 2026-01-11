@@ -4,7 +4,7 @@ import csv
 import base64
 from bs4 import BeautifulSoup
 
-MIN_YEAR = 2018
+MIN_YEAR = 2025
 MAX_YEAR = 2025
 DUMP_NAME = "output/output_%s.csv"
 
